@@ -1,0 +1,157 @@
+###E13.5 scATAC-seq data
+library(Signac)
+library(Seurat)
+library(GenomeInfoDb)
+library(EnsDb.Mmusculus.v79)
+library(ggplot2)
+library(patchwork)
+set.seed(1234)
+skin_counts <- Read10X_h5("E:/10xATAC data/scATAC_skin/10xATAC_skin/E13.5_skin/outs/filtered_peak_bc_matrix.h5")
+skin_metadata <- read.csv(file = "E:/10xATAC data/scATAC_skin/10xATAC_skin/E13.5_skin/outs/singlecell.csv",header = TRUE,row.names = 1)
+fragment.path <- 'E:/10xATAC data/scATAC_skin/10xATAC_skin/E13.5_skin/outs/fragments.tsv.gz'
+skin_assay <- CreateChromatinAssay(counts = skin_counts,sep = c(":", "-"),fragments = fragment.path,min.cells = 1)
+skin <- CreateSeuratObject(counts = skin_assay,assay = 'peaks',project = 'ATAC',meta.data = skin_metadata)
+annotations <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
+seqlevelsStyle(annotations) <- 'UCSC'
+genome(annotations) <- "mm10"
+Annotation(skin) <- annotations
+skin <- NucleosomeSignal(object = skin)           
+skin$nucleosome_group <- ifelse(skin$nucleosome_signal > 4, 'NS > 4', 'NS < 4')
+skin <- TSSEnrichment(skin, fast = FALSE)
+skin$high.tss <- ifelse(skin$TSS.enrichment > 2, 'High', 'Low')
+TSSPlot(skin, group.by = 'high.tss') + NoLegend()
+skin$pct_reads_in_peaks <- skin$peak_region_fragments / skin$passed_filters * 100
+skin$blacklist_ratio <- skin$blacklist_region_fragments / skin$peak_region_fragments
+VlnPlot(object = skin,features = c('pct_reads_in_peaks', 'peak_region_fragments','TSS.enrichment', 'blacklist_ratio', 'nucleosome_signal'),pt.size = 0.5,ncol = 5)
+skin <- subset(x = skin,subset = peak_region_fragments > 3000 &peak_region_fragments < 100000 & pct_reads_in_peaks > 40 & blacklist_ratio < 0.025 & nucleosome_signal < 4 & TSS.enrichment > 2)
+skin <- RunTFIDF(skin)
+skin <- FindTopFeatures(skin, min.cutoff = 'q0')
+skin <- RunSVD(object = skin)
+DepthCor(skin)
+skin <- RunUMAP(object = skin,reduction = 'lsi',dims = 2:6)
+skin <- FindNeighbors(object = skin,reduction = 'lsi',dims = 2:6)
+skin <- FindClusters(object = skin,algorithm = 3,resolution =0.2,verbose = FALSE)
+DimPlot(object = skin, label = TRUE) + NoLegend()
+my_color2=c("#C987BB", "#5BBC5E", "#9851A1", "#83BA40", "#8C6DAF", "#ADFF2F", "#5767AE", "#E68824", "#6495ED", "#5F9EA0", "#7859A3", "#228B22", "#C84F9E", "#4DC1B4", "#EE82EE", "#40E0D0", "#FF7F50","#D5AC3C","#FF8C00","#FFA500")
+DimPlot(skin, reduction = "umap",  cols =my_color2, label = TRUE)+ theme(axis.text = element_text(size = 15),axis.title = element_text(size = 20))
+gene.activities <- GeneActivity(skin)
+skin[['RNA']] <- CreateAssayObject(counts = gene.activities)
+skin<- NormalizeData(object = skin,assay = 'RNA',normalization.method = 'LogNormalize',scale.factor = median(skin$nCount_RNA))
+DefaultAssay(skin) <- 'RNA'
+diff_peaks<-FindAllMarkers(skin,min.pct=0.01,test.use="LR",logfc.threshold=0.1,only.pos=T)
+write.csv(diff_peaks,file = "E:/scientific data/E13.5_diff_peaks.csv.")
+saveRDS(skin,"E:/scientific data/E13.5_ATAC_DefaultAssay.rds.")
+DotPlot(skin, features = c("Twist2","Col1a1","Krt14","Krt15","Cd86","Inpp5d","Sox5","Sox10","Pecam1","Kdr","Pax7","Cdh15"))
+skin <- RenameIdents(object = skin,'0' = 'Fibroblasts-1','1' = 'Fibroblasts-2','2' = 'Fibroblasts-3','3' = 'Keratinocytes-1','4' = 'Macrophages','5' = 'Schwann','6' = 'Blood vessels','7' = 'Muscle','8' = 'Keratinocytes-2')
+levels(skin)
+My_levels<-c('Fibroblasts-1','Fibroblasts-2','Fibroblasts-3','Keratinocytes-1','Keratinocytes-2','Macrophages','Schwann','Blood vessels','Muscle')
+Idents(skin)<- factor(Idents(skin),levels = My_levels)
+levels(skin)
+DotPlot(skin, features = c("Twist2","Col1a1","Krt14","Krt15","Cd86","Inpp5d","Sox5","Sox10","Pecam1","Kdr","Pax7","Cdh15"))
+table(Idents(skin))
+prop.table(table(Idents(skin)))
+
+
+###E16.5 scATAC-seq data
+library(Signac)
+library(Seurat)
+library(GenomeInfoDb)
+library(EnsDb.Mmusculus.v79)
+library(ggplot2)
+library(patchwork)
+set.seed(1234)
+skin_counts <- Read10X_h5("E:/10xATAC data/scATAC_skin/10xATAC_skin/E16.5_skin/outs/filtered_peak_bc_matrix.h5")
+skin_metadata <- read.csv(file = "E:/10xATAC data/scATAC_skin/10xATAC_skin/E16.5_skin/outs/singlecell.csv",header = TRUE,row.names = 1)
+fragment.path <- 'E:/10xATAC data/scATAC_skin/10xATAC_skin/E16.5_skin/outs/fragments.tsv.gz'
+skin_assay <- CreateChromatinAssay(counts = skin_counts,sep = c(":", "-"),fragments = fragment.path,min.cells = 1)
+skin <- CreateSeuratObject(counts = skin_assay,assay = 'peaks',project = 'ATAC',meta.data = skin_metadata)
+annotations <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
+seqlevelsStyle(annotations) <- 'UCSC'
+genome(annotations) <- "mm10"
+Annotation(skin) <- annotations
+skin <- NucleosomeSignal(object = skin)
+skin$nucleosome_group <- ifelse(skin$nucleosome_signal > 4, 'NS > 4', 'NS < 4')
+skin <- TSSEnrichment(skin, fast = FALSE)
+skin$high.tss <- ifelse(skin$TSS.enrichment > 2, 'High', 'Low')
+TSSPlot(skin, group.by = 'high.tss') + NoLegend()
+skin$pct_reads_in_peaks <- skin$peak_region_fragments / skin$passed_filters * 100
+skin$blacklist_ratio <- skin$blacklist_region_fragments / skin$peak_region_fragments
+VlnPlot(object = skin,features = c('pct_reads_in_peaks', 'peak_region_fragments','TSS.enrichment', 'blacklist_ratio', 'nucleosome_signal'),pt.size = 0.5,ncol = 5)
+skin
+skin <- subset(x = skin,subset = peak_region_fragments > 3000 &peak_region_fragments < 100000 & pct_reads_in_peaks > 40 & blacklist_ratio < 0.025 & nucleosome_signal < 4 & TSS.enrichment > 2)
+skin <- RunTFIDF(skin)
+skin <- FindTopFeatures(skin, min.cutoff = 'q0')
+skin <- RunSVD(object = skin)
+DepthCor(skin)
+skin <- RunUMAP(object = skin,reduction = 'lsi',dims = 2:30)
+skin <- FindNeighbors(object = skin,reduction = 'lsi',dims = 2:30)
+skin <- FindClusters(object = skin,algorithm = 3,resolution =0.2,verbose = FALSE)
+DimPlot(object = skin, label = TRUE) + NoLegend()
+my_color2=c("#C987BB", "#5BBC5E", "#9851A1", "#83BA40", "#8C6DAF", "#ADFF2F", "#5767AE", "#E68824", "#6495ED", "#5F9EA0", "#7859A3", "#228B22", "#C84F9E", "#4DC1B4", "#EE82EE", "#40E0D0", "#FF7F50","#D5AC3C","#FF8C00","#FFA500")
+DimPlot(skin, reduction = "umap",  cols =my_color2, label = TRUE)+ theme(axis.text = element_text(size = 15),axis.title = element_text(size = 20))
+gene.activities <- GeneActivity(skin)
+skin[['RNA']] <- CreateAssayObject(counts = gene.activities)
+skin<- NormalizeData(object = skin,assay = 'RNA',normalization.method = 'LogNormalize',scale.factor = median(skin$nCount_RNA))
+DefaultAssay(skin) <- 'RNA'
+diff_peaks<-FindAllMarkers(skin,min.pct=0.01,test.use="LR",logfc.threshold=0.1,only.pos=T)
+DotPlot(skin, features = c("Twist2","Col1a1","Krt14","Krt15","Kdr","Flt4","Cpa3","Ccr8","F13a1","Cd86","Myod1","Myog","Gpr17","Lims2","Tyr","Dct","Ctsd","Lamp1"))
+skin <- RenameIdents(object = skin,'0' = 'Fibroblasts-1','1' = 'Keratinocytes','2' = 'Fibroblasts-2','3' = 'Blood vessels-1','4' = 'Lymphocytes','5' = 'Macrophages','6' = 'Fibroblasts-3','7' = 'Muscle','8' = 'Schwann','9' = 'Blood vessels-2','10' = 'Melanocytes-1','11' = 'Melanocytes-2')
+levels(skin)
+My_levels<-c('Fibroblasts-1','Fibroblasts-2','Fibroblasts-3','Keratinocytes','Blood vessels-1','Blood vessels-2','Lymphocytes','Macrophages','Muscle','Schwann','Melanocytes-1','Melanocytes-2')
+Idents(skin)<- factor(Idents(skin),levels = My_levels)
+levels(skin)
+DotPlot(skin, features = c("Twist2","Col1a1","Krt14","Krt15","Kdr","Flt4","Cpa3","Ccr8","F13a1","Cd86","Myod1","Myog","Gpr17","Lims2","Tyr","Dct","Ctsd","Lamp1"))
+table(Idents(skin))
+prop.table(table(Idents(skin)))
+
+
+###P0 scATAC-seq data
+library(Signac)
+library(Seurat)
+library(GenomeInfoDb)
+library(EnsDb.Mmusculus.v79)
+library(ggplot2)
+library(patchwork)
+set.seed(1234)
+skin_counts <- Read10X_h5("E:/10xATAC data/scATAC_skin/10xATAC_skin/P0_skin/outs/filtered_peak_bc_matrix.h5")
+skin_metadata <- read.csv(file = "E:/10xATAC data/scATAC_skin/10xATAC_skin/P0_skin/outs/singlecell.csv",header = TRUE,row.names = 1)
+fragment.path <- 'E:/10xATAC data/scATAC_skin/10xATAC_skin/P0_skin/outs/fragments.tsv.gz'
+skin_assay <- CreateChromatinAssay(counts = skin_counts,sep = c(":", "-"),fragments = fragment.path,min.cells = 1)
+skin <- CreateSeuratObject(counts = skin_assay,assay = 'peaks',project = 'ATAC',meta.data = skin_metadata)
+annotations <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
+seqlevelsStyle(annotations) <- 'UCSC'
+genome(annotations) <- "mm10"
+Annotation(skin) <- annotations
+skin <- NucleosomeSignal(object = skin)
+skin$nucleosome_group <- ifelse(skin$nucleosome_signal > 4, 'NS > 4', 'NS < 4')
+skin <- TSSEnrichment(skin, fast = FALSE)
+skin$high.tss <- ifelse(skin$TSS.enrichment > 2, 'High', 'Low')
+TSSPlot(skin, group.by = 'high.tss') + NoLegend()
+skin$pct_reads_in_peaks <- skin$peak_region_fragments / skin$passed_filters * 100
+skin$blacklist_ratio <- skin$blacklist_region_fragments / skin$peak_region_fragments
+VlnPlot(object = skin,features = c('pct_reads_in_peaks', 'peak_region_fragments','TSS.enrichment', 'blacklist_ratio', 'nucleosome_signal'),pt.size = 0.5,ncol = 5)
+skin
+skin <- subset(x = skin,subset = peak_region_fragments > 3000 &peak_region_fragments < 100000 & pct_reads_in_peaks > 40 & blacklist_ratio < 0.025 & nucleosome_signal < 4 & TSS.enrichment > 2)
+skin <- RunTFIDF(skin)
+skin <- FindTopFeatures(skin, min.cutoff = 'q0')
+skin <- RunSVD(object = skin)
+DepthCor(skin)
+skin <- RunUMAP(object = skin,reduction = 'lsi',dims = 2:7)
+skin <- FindNeighbors(object = skin,reduction = 'lsi',dims = 2:7)
+skin <- FindClusters(object = skin,algorithm = 3,resolution =0.5,verbose = FALSE)
+DimPlot(object = skin, label = TRUE) + NoLegend()
+my_color2=c("#C987BB", "#5BBC5E", "#9851A1", "#83BA40", "#8C6DAF", "#ADFF2F", "#5767AE", "#E68824", "#6495ED", "#5F9EA0", "#7859A3", "#228B22", "#C84F9E", "#4DC1B4", "#EE82EE", "#40E0D0", "#FF7F50","#D5AC3C","#FF8C00","#FFA500")
+DimPlot(skin, reduction = "umap",  cols =my_color2, label = TRUE)+ theme(axis.text = element_text(size = 15),axis.title = element_text(size = 20))
+gene.activities <- GeneActivity(skin)
+skin[['RNA']] <- CreateAssayObject(counts = gene.activities)
+skin<- NormalizeData(object = skin,assay = 'RNA',normalization.method = 'LogNormalize',scale.factor = median(skin$nCount_RNA))
+DefaultAssay(skin) <- 'RNA'
+diff_peaks<-FindAllMarkers(skin,min.pct=0.01,test.use="LR",logfc.threshold=0.1,only.pos=T)
+skin <- RenameIdents(object = skin,'0' = 'Fibroblasts-1','1' = 'Keratinocytes-1','2' = 'Fibroblasts-2','3' = 'Fibroblasts-3','4' = 'Keratinocytes-2','5' = 'Keratinocytes-3','6' = 'Keratinocytes-4','7' = 'Fibroblasts-4','8' = 'Keratinocytes-5','9' = 'Fibroblasts-5','10' = 'Melanocytes','11' = 'Blood vessels','12' = 'Pericytes')
+levels(skin)
+My_levels<-c('Fibroblasts-1','Fibroblasts-2','Fibroblasts-3','Fibroblasts-4','Fibroblasts-5','Keratinocytes-1','Keratinocytes-2','Keratinocytes-3','Keratinocytes-4','Keratinocytes-5','Melanocytes','Blood vessels','Pericytes')
+Idents(skin)<- factor(Idents(skin),levels = My_levels)
+levels(skin)
+DotPlot(skin, features = c("Twist2","Col1a1","Krt14","Krt15","Pax3","Plp1","Kdr","Cdh5","Ebf2","Rgs5"))
+table(Idents(skin))
+prop.table(table(Idents(skin)))
