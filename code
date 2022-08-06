@@ -155,3 +155,247 @@ levels(skin)
 DotPlot(skin, features = c("Twist2","Col1a1","Krt14","Krt15","Pax3","Plp1","Kdr","Cdh5","Ebf2","Rgs5"))
 table(Idents(skin))
 prop.table(table(Idents(skin)))
+
+###  integration of the fibroblasts and keratinocytes cluster
+##data preprocessing
+setwd("/home/lab401_B/Lifang")
+library(Signac)
+library(Seurat)
+library(GenomeInfoDb)
+library(EnsDb.Mmusculus.v79)
+library(ggplot2)
+library(patchwork)
+set.seed(1234)
+E13.5_counts <- Read10X_h5("/home/lab401_B/Lifang/input/E13/filtered_peak_bc_matrix.h5")
+E13.5_metadata <- read.csv(file = "/home/lab401_B/Lifang/input/E13/singlecell.csv",header = TRUE,row.names = 1)
+fragment.path <- '/home/lab401_B/Lifang/input/E13/fragments.tsv.gz'
+E13.5_assay <- CreateChromatinAssay(counts = E13.5_counts,sep = c(":", "-"),fragments = fragment.path,min.cells = 1)
+E13.5 <- CreateSeuratObject(counts = E13.5_assay,assay = 'peaks',project = 'ATAC',meta.data = E13.5_metadata)
+annotations <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
+seqlevelsStyle(annotations) <- 'UCSC'
+genome(annotations) <- "mm10"
+Annotation(E13.5) <- annotations
+E13.5 <- NucleosomeSignal(object = E13.5)  
+E13.5$nucleosome_group <- ifelse(E13.5$nucleosome_signal > 4, 'NS > 4', 'NS < 4')
+E13.5 <- TSSEnrichment(E13.5, fast = FALSE)
+E13.5$high.tss <- ifelse(E13.5$TSS.enrichment > 2, 'High', 'Low')
+E13.5$pct_reads_in_peaks <- E13.5$peak_region_fragments / E13.5$passed_filters * 100
+E13.5$blacklist_ratio <- E13.5$blacklist_region_fragments / E13.5$peak_region_fragments
+E13.5<- subset(x = E13.5,subset = peak_region_fragments > 3000
+                                  &peak_region_fragments < 100000 & 
+                                      pct_reads_in_peaks > 40 & 
+                                    blacklist_ratio < 0.025 & 
+                                     nucleosome_signal < 4 & 
+                                    TSS.enrichment > 2)
+E13.5 <- RunTFIDF(E13.5)
+E13.5 <- FindTopFeatures(E13.5, min.cutoff = 'q0')
+E13.5 <- RunSVD(object = E13.5)
+E13.5 <- RunUMAP(object = E13.5,reduction = 'lsi',dims = 2:6)
+E13.5 <- FindNeighbors(object = E13.5,reduction = 'lsi',dims = 2:6)
+E13.5 <- FindClusters(object = E13.5,algorithm = 3,resolution =0.2,verbose = FALSE)
+my_color2=c("#C987BB", "#5BBC5E", "#9851A1", "#83BA40", "#8C6DAF", "#ADFF2F", "#5767AE", "#E68824", "#6495ED", "#5F9EA0", "#7859A3", "#228B22", "#C84F9E", "#4DC1B4", "#EE82EE", "#40E0D0", "#FF7F50","#D5AC3C","#FF8C00","#FFA500")
+DimPlot(E13.5, reduction = "umap",  cols =my_color2, label = TRUE)+ theme(axis.text = element_text(size = 15),axis.title = element_text(size = 20))
+E13.5 <- RenameIdents(object = E13.5 ,'0' = 'Fibroblasts','1' = 'Fibroblasts','2' = 'Fibroblasts','3' = 'Keratinocytes','4' = 'Macrophages','5' = 'Schwann','6' = 'Blood vessels','7' = 'Muscle','8' = 'Keratinocytes')
+gene.activities <- GeneActivity(E13.5)
+E13.5 [['RNA']] <- CreateAssayObject(counts = gene.activities)
+E13.5<- NormalizeData(object = E13.5,assay = 'RNA',normalization.method = 'LogNormalize',scale.factor = median(E13.5$nCount_RNA))
+DefaultAssay(E13.5) <- 'RNA'
+saveRDS(E13.5,"/home/lab401_B/Lifang/0711_E13.5_ATAC_DefaultAssay.rds.")
+E16.5_counts <- Read10X_h5("/home/lab401_B/Lifang/input/E16/filtered_peak_bc_matrix.h5")
+E16.5_metadata <- read.csv(file = "/home/lab401_B/Lifang/input/E16/singlecell.csv",header = TRUE,row.names = 1)
+fragment.path <- '/home/lab401_B/Lifang/input/E16/fragments.tsv.gz'
+E16.5_assay <- CreateChromatinAssay(counts = E16.5_counts,sep = c(":", "-"),fragments = fragment.path,min.cells = 1)
+E16.5 <- CreateSeuratObject(counts = E16.5_assay,assay = 'peaks',project = 'ATAC',meta.data = E16.5_metadata)
+annotations <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
+seqlevelsStyle(annotations) <- 'UCSC'
+genome(annotations) <- "mm10"
+Annotation(E16.5) <- annotations
+E16.5 <- NucleosomeSignal(object = E16.5)
+E16.5$nucleosome_group <- ifelse(E16.5$nucleosome_signal > 4, 'NS > 4', 'NS < 4')
+E16.5 <- TSSEnrichment(E16.5, fast = FALSE)
+E16.5$high.tss <- ifelse(E16.5$TSS.enrichment > 2, 'High', 'Low')
+E16.5$pct_reads_in_peaks <- E16.5$peak_region_fragments / E16.5$passed_filters * 100
+E16.5$blacklist_ratio <- E16.5$blacklist_region_fragments / E16.5$peak_region_fragments
+E16.5 <- subset(x = E16.5,subset = peak_region_fragments > 3000
+                   &peak_region_fragments < 100000 &
+                     pct_reads_in_peaks > 40 &
+                     blacklist_ratio < 0.025 &
+                     nucleosome_signal < 4 &
+                     TSS.enrichment > 2)
+E16.5 <- RunTFIDF(E16.5)
+E16.5 <- FindTopFeatures(E16.5, min.cutoff = 'q0')
+E16.5 <- RunSVD(object = E16.5)
+E16.5 <- RunUMAP(object = E16.5,reduction = 'lsi',dims = 2:30)
+E16.5 <- FindNeighbors(object = E16.5,reduction = 'lsi',dims = 2:30)
+E16.5 <- FindClusters(object = E16.5,algorithm = 3,resolution =0.2,verbose = FALSE)
+DimPlot(E16.5, reduction = "umap",  cols =my_color2, label = TRUE)+ theme(axis.text = element_text(size = 15),axis.title = element_text(size = 20))
+E16.5 <- RenameIdents(object = E16.5,'0' = 'Fibroblasts','1' = 'Keratinocytes','2' = 'Fibroblasts','3' = 'Blood vessels','4' = 'Lymphocytes','5' = 'Macrophages','6' = 'Fibroblasts','7' = 'Muscle','8' = 'Schwann','9' = 'Blood vessels','10' = 'Melanocytes','11' = 'Melanocytes')
+gene.activities <- GeneActivity(E16.5)
+E16.5 [['RNA']] <- CreateAssayObject(counts = gene.activities)
+E16.5<- NormalizeData(object = E16.5,assay = 'RNA',normalization.method = 'LogNormalize',scale.factor = median(E16.5$nCount_RNA))
+DefaultAssay(E16.5) <- 'RNA'
+saveRDS(E16.5,"/home/lab401_B/Lifang/0711_E16.5_ATAC_DefaultAssay.rds.")
+P0_counts <- Read10X_h5("/home/lab401_B/Lifang/input/E19/filtered_peak_bc_matrix.h5")
+P0_metadata <- read.csv(file = "/home/lab401_B/Lifang/input/E19/singlecell.csv",header = TRUE,row.names = 1)
+fragment.path <- '/home/lab401_B/Lifang/input/E19/fragments.tsv.gz'
+P0_assay <- CreateChromatinAssay(counts = P0_counts,sep = c(":", "-"),fragments = fragment.path,min.cells = 1)
+P0 <- CreateSeuratObject(counts = P0_assay,assay = 'peaks',project = 'ATAC',meta.data = P0_metadata)
+annotations <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
+seqlevelsStyle(annotations) <- 'UCSC'
+genome(annotations) <- "mm10"
+Annotation(P0) <- annotations
+P0 <- NucleosomeSignal(object = P0)
+P0$nucleosome_group <- ifelse(P0$nucleosome_signal > 4, 'NS > 4', 'NS < 4')
+P0 <- TSSEnrichment(P0, fast = FALSE)
+P0$high.tss <- ifelse(P0$TSS.enrichment > 2, 'High', 'Low')
+P0$pct_reads_in_peaks <- P0$peak_region_fragments / P0$passed_filters * 100
+P0$blacklist_ratio <- P0$blacklist_region_fragments / P0$peak_region_fragments
+P0 <- subset(x = P0,subset = peak_region_fragments > 3000
+                &peak_region_fragments < 100000 &
+                  pct_reads_in_peaks > 40 &
+                  blacklist_ratio < 0.025 &
+                  nucleosome_signal < 4 &
+                  TSS.enrichment > 2)
+P0 <- RunTFIDF(P0)
+P0 <- FindTopFeatures(P0, min.cutoff = 'q0')
+P0<- RunSVD(object = P0)
+P0 <- RunUMAP(object = P0,reduction = 'lsi',dims = 2:7)
+P0 <- FindNeighbors(object = P0,reduction = 'lsi',dims = 2:7)
+P0 <- FindClusters(object = P0,algorithm = 3,resolution =0.4,verbose = FALSE)
+DimPlot(P0, reduction = "umap",  cols =my_color2, label = TRUE)+ theme(axis.text = element_text(size = 15),axis.title = element_text(size = 20))
+P0 <- RenameIdents(object = P0,'0' = 'Fibroblasts','1' = 'Keratinocytes','2' = 'Fibroblasts','3' = 'Fibroblasts','4' = 'Keratinocytes','5' = 'Keratinocytes','6' = 'Keratinocytes','7' = 'Fibroblasts','8' = 'Keratinocytes','9' = 'Fibroblasts','10' = 'Melanocytes','11' = 'Blood vessels','12' = 'Pericytes')
+gene.activities <- GeneActivity(P0)
+P0 [['RNA']] <- CreateAssayObject(counts = gene.activities)
+P0<- NormalizeData(object = P0,assay = 'RNA',normalization.method = 'LogNormalize',scale.factor = median(P0$nCount_RNA))
+DefaultAssay(P0) <- 'RNA'
+saveRDS(P0,"/home/lab401_B/Lifang/0711_P0_ATAC_DefaultAssay.rds.")
+
+##integration of the fibroblasts  clusters
+E13.5<-readRDS("/home/lab401_B/Lifang/0711_E13.5_ATAC_DefaultAssay.rds.")
+E16.5<-readRDS("/home/lab401_B/Lifang/0711_E16.5_ATAC_DefaultAssay.rds.")
+P0<-readRDS("/home/lab401_B/Lifang/0711_P0_ATAC_DefaultAssay.rds.")
+E13.5<- subset(x = E13.5, idents =c("Fibroblasts")) 
+E16.5<- subset(x = E16.5, idents =c("Fibroblasts"))  
+P0<- subset(x = P0, idents =c("Fibroblasts"))
+E13.5$stage <- 'E13.5'
+E13.5$celltype <- Idents(E13.5)
+E16.5$stage <- 'E16.5'
+E16.5$celltype <- Idents(E16.5)
+P0$stage <- 'P0'
+P0$celltype <- Idents(P0)
+skin_Fib <- merge(E13.5, y = c(E16.5, P0))
+skin_Fib <- RunTFIDF(skin_Fib)
+skin_Fib<- FindTopFeatures(skin_Fib, min.cutoff = 'q0')
+skin_Fib <- RunSVD(object = skin_Fib)
+skin_Fib <- RunUMAP(object = skin_Fib,reduction = 'lsi',dims = 2:30)
+skin_Fib <- FindNeighbors(object = skin_Fib,reduction = 'lsi',dims = 2:30)
+skin_Fib <- FindClusters(object = skin_Fib,algorithm = 3,resolution =0.5,verbose = FALSE)
+DimPlot(skin_Fib, reduction = "umap",label = TRUE)+ theme(axis.text = element_text(size = 15),axis.title = element_text(size = 20))
+saveRDS(skin_Fib,"/home/lab401_B/Lifang/0727_skin_Fib_ATAC_findcluster.rds")
+DimPlot(skin_Fib, reduction = "umap",label = TRUE,group.by= "stage")+ theme(axis.text = element_text(size = 15),axis.title = element_text(size = 20))
+skin_Fib <- SetIdent(skin_Fib, value = "stage")
+DimPlot(skin_Fib, reduction = "umap",label = TRUE)+ theme(axis.text = element_text(size = 15),axis.title = element_text(size = 20))
+diff_peaks<-FindAllMarkers(skin_Fib,min.pct=0.01,test.use="LR",logfc.threshold=0.1,only.pos=T)
+VlnPlot(object = skin_Fib,features = c("Twist2"),pt.size = 0.1,idents = c("E13.5","E16.5","P0"))
+VlnPlot(object = skin_Fib,features = c("Col1a1"),pt.size = 0.1,idents = c("E13.5","E16.5","P0"))
+FeaturePlot(object = skin_Fib,features = c("Twist2"),pt.size = 0.1)
+FeaturePlot(object = skin_Fib,features = c("Col1a1"),pt.size = 0.1)
+write.csv(diff_peaks,file = "/home/lab401_B/Lifang/scientific_review/0713_skin_Fib_diff_geneactivity.csv")
+
+
+##integration of the keratinocytes clusters
+E13.5<-readRDS("/home/lab401_B/Lifang/0711_E13.5_ATAC_DefaultAssay.rds.")
+E16.5<-readRDS("/home/lab401_B/Lifang/0711_E16.5_ATAC_DefaultAssay.rds.")
+P0<-readRDS("/home/lab401_B/Lifang/0711_P0_ATAC_DefaultAssay.rds.")
+E13.5<- subset(x = E13.5, idents =c("Keratinocytes")) 
+E16.5<- subset(x = E16.5, idents =c("Keratinocytes"))  
+P0<- subset(x = P0, idents =c("Keratinocytes"))
+E13.5$stage <- 'E13.5'
+E13.5$celltype <- Idents(E13.5)
+E16.5$stage <- 'E16.5'
+E16.5$celltype <- Idents(E16.5)
+P0$stage <- 'P0'
+P0$celltype <- Idents(P0)
+skin_Ker <- merge(E13.5, y = c(E16.5, P0))
+skin_Ker <- RunTFIDF(skin_Ker)
+skin_Ker<- FindTopFeatures(skin_Ker, min.cutoff = 'q0')
+skin_Ker <- RunSVD(object = skin_Ker)
+skin_Ker <- RunUMAP(object = skin_Ker,reduction = 'lsi',dims = 2:30)
+skin_Ker <- FindNeighbors(object = skin_Ker,reduction = 'lsi',dims = 2:30)
+skin_Ker <- FindClusters(object = skin_Ker,algorithm = 3,resolution =0.2,verbose = FALSE)
+DimPlot(skin_Ker, reduction = "umap",label = TRUE)+ theme(axis.text = element_text(size = 15),axis.title = element_text(size = 20))
+saveRDS(skin_Ker,"/home/lab401_B/Lifang/0727_skin_Ker_ATAC_findcluster.rds")
+DimPlot(skin_Ker, reduction = "umap",label = TRUE,group.by= "stage")+ theme(axis.text = element_text(size = 15),axis.title = element_text(size = 20))
+skin_Ker <- SetIdent(skin_Ker, value = "stage")
+DimPlot(skin_Ker, reduction = "umap",label = TRUE)+ theme(axis.text = element_text(size = 15),axis.title = element_text(size = 20))
+diff_peaks<-FindAllMarkers(skin_Ker,min.pct=0.01,test.use="LR",logfc.threshold=0.1,only.pos=T)
+write.csv(diff_peaks,file = "/home/lab401_B/Lifang/0712_skin_Ker_diff_geneactivity.csv")
+
+##clustering of fibroblasts
+skin_Fib<-readRDS("E:/scientific data/review/0727_skin_Fib_ATAC_findcluster.rds")
+DimPlot(skin_Fib, reduction = "umap",label = TRUE)+ theme(axis.text = element_text(size = 15),axis.title = element_text(size = 20))
+library(harmony)
+hm.integrated <- RunHarmony( object = skin_Fib, group.by.vars = 'stage', reduction = 'lsi',assay.use = 'peaks', project.dim = FALSE )
+hm.integrated <- RunUMAP(hm.integrated, dims = 2:30, reduction = 'lsi')
+hm.integrated <- FindNeighbors(object = hm.integrated,reduction = 'lsi',dims = 2:30)
+hm.integrated <- FindClusters(object = hm.integrated,algorithm = 3,resolution =0.4,verbose = FALSE)
+DimPlot(hm.integrated, reduction = "umap",label = TRUE)+ theme(axis.text = element_text(size = 15),axis.title = element_text(size = 20))
+DimPlot(hm.integrated, reduction = "umap",label = TRUE,group.by= "stage")+ theme(axis.text = element_text(size = 15),axis.title = element_text(size = 20))
+DimPlot(hm.integrated, reduction = "umap")+ theme(axis.text = element_text(size = 15),axis.title = element_text(size = 20))
+diff_peaks<-FindAllMarkers(hm.integrated,min.pct=0.05,test.use="LR",logfc.threshold=0.25,only.pos=T)
+write.csv(diff_peaks,file = "/home/Wangxin/new_total/0727_skin_Fib_diff_peaks.csv")
+
+##clustering of keratinocytes
+skin_Ker<-readRDS("E:/scientific data/review/0727_skin_Ker_ATAC_findcluster.rds") 
+DimPlot(skin_Ker, reduction = "umap",label = TRUE)+ theme(axis.text = element_text(size = 15),axis.title = element_text(size = 20))
+library(harmony)
+hm.integrated <- RunHarmony( object = skin_Ker, group.by.vars = 'stage', reduction = 'lsi',assay.use = 'peaks', project.dim = FALSE )
+hm.integrated <- RunUMAP(hm.integrated, dims = 2:30, reduction = 'lsi')
+hm.integrated <- FindNeighbors(object = hm.integrated,reduction = 'lsi',dims = 2:30)
+hm.integrated <- FindClusters(object = hm.integrated,algorithm = 3,resolution =0.2,verbose = FALSE)
+DimPlot(hm.integrated, reduction = "umap",label = TRUE,group.by= "stage")+ theme(axis.text = element_text(size = 15),axis.title = element_text(size = 20))
+hm.integrated <- FindClusters(object = hm.integrated,algorithm = 3,resolution =0.4,verbose = FALSE)
+DimPlot(hm.integrated, reduction = "umap")+ theme(axis.text = element_text(size = 15),axis.title = element_text(size = 20))
+diff_peaks<-FindAllMarkers(hm.integrated,min.pct=0.01,test.use="LR",logfc.threshold=0.25,only.pos=T)
+write.csv(diff_peaks,file = "E:/scientific data/review/0728_skin_Ker_10cluster_diff_geneactivity.csv")
+
+##Find differential peaks of fibroblasts and keratinocytes subtypes
+library(Signac)
+library(Seurat)
+library(GenomeInfoDb)
+library(EnsDb.Mmusculus.v79)
+library(ggplot2)
+library(patchwork)
+set.seed(1234)
+skin_Fib<-readRDS("/home/lab401_B/Lifang/0727_skin_Fib_ATAC_findcluster.rds")
+library(harmony)
+hm.integrated <- RunHarmony( object = skin_Fib, group.by.vars = 'stage', reduction = 'lsi',assay.use = 'peaks', project.dim = FALSE )
+hm.integrated <- RunUMAP(hm.integrated, dims = 2:30, reduction = 'lsi')
+hm.integrated <- FindNeighbors(object = hm.integrated,reduction = 'lsi',dims = 2:30)
+hm.integrated <- FindClusters(object = hm.integrated,algorithm = 3,resolution =0.4,verbose = FALSE)
+DimPlot(hm.integrated, reduction = "umap",label = TRUE)+ theme(axis.text = element_text(size = 15),axis.title = element_text(size = 20))
+hm.integrated <- RenameIdents( object = hm.integrated,'0' = 'Fibroblast progenitor-1', '1' = 'Fibroblast progenitor-2','2' = 'Papillary fibroblast-1','3' = 'Reticular fibroblast-1', '4' = 'DC', '5' = 'Fibroblast progenitor-3','6' = 'pre-DC','7' = 'Papillary fibroblast-2','8' = 'Reticular fibroblast-2', '9' = 'DP','10' = 'Fassia','11' = 'Dividing fibroblast')
+DefaultAssay(hm.integrated) <- 'peaks'
+diff_peaks_1<-FindAllMarkers(hm.integrated,min.pct=0.1,test.use="LR",logfc.threshold=0.25,only.pos=T)
+write.csv(diff_peaks_1,file = "/home/lab401_B/Lifang/0727_skin_Fib_diff_peaks.csv")
+
+
+skin_Ker<-readRDS("/home/Wangxin/new_total/0727_skin_Ker_ATAC_findcluster.rds") 
+hm.integrated <- RunHarmony( object = skin_Ker, group.by.vars = 'stage', reduction = 'lsi',assay.use = 'peaks', project.dim = FALSE )
+hm.integrated <- RunUMAP(hm.integrated, dims = 2:30, reduction = 'lsi')
+hm.integrated <- FindNeighbors(object = hm.integrated,reduction = 'lsi',dims = 2:30)
+hm.integrated <- FindClusters(object = hm.integrated,algorithm = 3,resolution =0.4,verbose = FALSE)
+hm.integrated <- RenameIdents( object = hm.integrated,'0' = 'Pc', '1' = 'hair germ','2' = 'pre-Pc','3' = 'IRS', '4' = 'HFSCs and their precursors-1', '5' = 'HFSCs and their precursors-2','6' = 'HFSCs and their precursors-3','7' = 'Keratinized cells','8' = 'Epithelial cells', '9' = 'Terminally differentiated cells','10' = 'Negative cells')
+diff_peaks<-FindAllMarkers(hm.integrated,min.pct=0.05,test.use="LR",logfc.threshold=0.25,only.pos=T)
+write.csv(diff_peaks,file = "/home/Wangxin/new_total/0727_skin_Ker_diff_peaks.csv")
+
+##Find differential peaks of fibroblasts and keratinocytes ckusters in different stage 
+skin_Ker<-readRDS("/home/lab401_B/Lifang/skin_Ker_RunTFIDF.rds")
+skin_Ker <- SetIdent(skin_Ker, value = "stage")
+diff_peaks<-FindAllMarkers(skin_Ker,min.pct=0.01,test.use="LR",logfc.threshold=0.1,only.pos=T)
+write.csv(diff_peaks,file = "/home/lab401_B/Lifang/scientific_review/0713_skin_Ker_diff_peaks.csv")
+
+skin_Fib<-readRDS("/home/lab401_B/Lifang/skin_Fib_RunTFIDF.rds")
+skin_Fib <- SetIdent(skin_Fib, value = "stage")
+diff_peaks<-FindAllMarkers(skin_Fib,min.pct=0.01,test.use="LR",logfc.threshold=0.1,only.pos=T)
+write.csv(diff_peaks,file = "/home/lab401_B/Lifang/scientific_review/T_0713_skin_Fib_diff_peaks.csv")
